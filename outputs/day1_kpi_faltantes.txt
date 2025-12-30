@@ -1,0 +1,5 @@
+Fecha (ej: 2025-12-29)
+
+“Resultado KPI faltantes”
+
+Las 3 filas que te salieron (product_code + current_stock + reorder_level + shortage)
