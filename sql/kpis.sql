@@ -1,0 +1,3 @@
+-- kpis.sql
+-- KPI 1: Faltantes (placeholder)
+-- Próximo paso: adaptar a ENTRADAS/SALIDAS/PRODUCTOS y generar alerta real
