@@ -1,0 +1,120 @@
+{
+  "name": "day2_stock_alert_manual",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "02164438-c021-4e6d-8729-8055095006f5",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  p.product_code,\n  p.product_name,\n  p.category,\n  COALESCE(s.current_stock, 0) AS current_stock,\n  p.reorder_level,\n  (p.reorder_level - COALESCE(s.current_stock, 0)) AS shortage\nFROM products p\nLEFT JOIN vw_stock_current s ON s.product_id = p.product_id\nWHERE p.reorder_level IS NOT NULL\n  AND COALESCE(s.current_stock, 0) < p.reorder_level\nORDER BY shortage DESC;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        208,
+        0
+      ],
+      "id": "12cdcca5-ad75-434d-be5f-4654d4d8e9ee",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "eMdhfhwvTG3VizvU",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\nif (rows.length === 0) {\n  return [{ json: { text: \"✅ Sin faltantes\" } }];\n}\n\nconst lines = rows.map(r =>\n  `• ${r.product_code} — ${r.product_name} | stock: ${r.current_stock} | min: ${r.reorder_level} | falta: ${r.shortage}`\n);\n\nconst text = `🚨 FALTANTES (${rows.length})\\n` + lines.join('\\n');\n\nreturn [{ json: { text } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "3742f5a6-2231-48c9-bef7-cd21f191e766",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "chatId": "8576563861",
+        "text": "={{$json.text}}\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "df5f901f-7c52-4509-aa75-1dd96929a81e",
+      "name": "Send a text message",
+      "webhookId": "2784be6c-7042-4c04-9f91-a54158f0fb84",
+      "credentials": {
+        "telegramApi": {
+          "id": "yfIgMPsuOCSypbNw",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "a8df9b41-cacb-43cc-a709-a8fefbe759ec",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "12660f99e44e79b8171b28121d275057ec2a7a2e3b01956afc989fbb06036770"
+  },
+  "id": "Z9D7jeJLtC2Glqay",
+  "tags": []
+}
