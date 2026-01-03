@@ -1,51 +1,70 @@
-# Ops Data Portfolio
+# Depot Stock Alert — PostgreSQL + n8n + Telegram
 
-## North Star
-Construir un sistema de control operativo automatizado (PostgreSQL + SQL + n8n) que genere **alertas reales de stock** y sirva como portfolio para roles remotos de Operations Analyst (Data & Automation).
+A small “operations control” project: compute current stock in PostgreSQL and send **real Telegram alerts** when items fall below a reorder level. Built as a portfolio-ready example for **Operations Analyst (Data & Automation)** roles.
 
-## Stack
-- PostgreSQL
+## What this does
+- Builds a minimal inventory model (`products`, `movements`) in PostgreSQL.
+- Computes current stock via a view: `vw_stock_current`.
+- Detects shortages when `current_stock < reorder_level`.
+- Runs an n8n workflow that queries shortages and sends a Telegram message listing:
+  `product_code, product_name, current_stock, reorder_level, shortage`.
+
+## Proof (evidence)
+- `outputs/day1_kpi_faltantes.txt` — SQL KPI result (shortages)
+- `outputs/day2_workflow.png` — n8n workflow screenshot
+- `outputs/day2_telegram.png` — real Telegram message screenshot
+
+## Tech stack
+- PostgreSQL 16
 - SQL
-- n8n
-- Google Sheets
-- GitHub
+- n8n (Docker)
+- Telegram Bot API
+- Git + GitHub
 
-## Qué vas a encontrar acá
-- Queries SQL reutilizables para stock, consumos y faltantes
-- Workflows de n8n (alertas, automatización)
-- Outputs simples (TXT/PNG/CSV/Sheets), sin dashboards pesados
+## Repo structure
+- `sql/`
+  - `schema.sql` — tables
+  - `sample_data.sql` — demo data (fake)
+  - `views.sql` — `vw_stock_current`
+  - `kpis.sql` — shortage KPI query
+- `n8n/`
+  - `alerta_stock_n8n.json` — exported n8n workflow
+- `outputs/` — evidence (txt/png)
+- `docs/` — short notes (optional)
 
-## Estado actual (progreso)
-✅ Hecho:
-- KPI de faltantes funcionando con datos fake (`sql/kpis.sql`)
-- Vista de stock actual (`sql/views.sql` → `vw_stock_current`)
-- Workflow n8n exportado que consulta Postgres y envía alerta a Telegram (`n8n/alerta_stock_n8n.json`)
+## Quickstart (local)
+### 1) PostgreSQL
+Create a database (example: `ops_portfolio`) and run the scripts in this order:
 
-📌 Evidencias:
-- `outputs/day1_kpi_faltantes.txt` (resultado KPI)
-- `outputs/day2_workflow.png` (captura del flujo n8n)
-- (pendiente) `outputs/day2_telegram.png` (captura del mensaje real)
+1. `sql/schema.sql`
+2. `sql/sample_data.sql`
+3. `sql/views.sql`
+4. `sql/kpis.sql`
 
-## Estructura del repo
-- `sql/` → queries y scripts SQL
-- `n8n/` → exports de workflows
-- `data/` → datos de ejemplo (si aplica)
-- `outputs/` → resultados exportados (txt/capturas/csv)
-- `docs/` → documentación corta (setup, supuestos, notas)
+Quick check:
+```sql
+SELECT * FROM vw_stock_current ORDER BY product_id;
+```
 
-## Entregable Semana 1
-- `sql/schema.sql`
-- `sql/sample_data.sql`
-- `sql/views.sql`
-- `sql/kpis.sql`
+### 2) n8n workflow (Telegram alert)
 
-## Cómo ejecutar (local)
-1) Abrí pgAdmin o psql
-2) Corré los scripts en este orden:
-   - `sql/schema.sql`
-   - `sql/sample_data.sql`
-   - `sql/views.sql`
-   - `sql/kpis.sql`
-3) (Opcional) Importá el workflow en n8n desde `n8n/alerta_stock_n8n.json`
+1. Start n8n (Docker).
+2. Import the workflow from: ``n8n/alerta_stock_n8n.json``.
+3. Create credentials in n8n:
+   - **Postgres:** host / port / db / user / password
+   - **Telegram:** bot token + chat_id
+4. Run the workflow manually (or schedule it) and confirm the message arrives.
 
-> Nota: Primero lo hacemos con dataset de ejemplo. Luego lo adaptamos a tus tablas reales (ENTRADAS/SALIDAS/PRODUCTOS).
+> No secrets are stored in this repository. Use n8n credentials and/or local `.env` files.
+
+
+## How it works (high level)
+- `vw_stock_current` aggregates movements (IN/OUT) to compute current stock.
+- The KPI query in `sql/kpis.sql` filters where stock is below reorder level and calculates the shortage.
+- n8n pulls those rows and formats a message to Telegram.
+
+## Roadmap (small improvements)
+- Add a scheduled trigger (e.g., Mondays 08:00).
+- Add an `alerts` table to log sent alerts (traceability).
+- Add KPI #2 (top monthly rotation) and KPI #3 (monthly consumption by category).
+
