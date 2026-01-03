@@ -49,7 +49,7 @@ SELECT * FROM vw_stock_current ORDER BY product_id;
 ### 2) Workflow n8n (alerta a Telegram)
 
 1. Levantá n8n (Docker).
-2. Importá el workflow desde: `n8n/alerta_stock_n8n.json`.
+2. Importá el workflow desde: `n8n/alert_stock_n8n.json`.
 3. Creá credenciales en n8n:
    - **Postgres:** host / port / db / user / password
    - **Telegram:** bot token + chat_id
