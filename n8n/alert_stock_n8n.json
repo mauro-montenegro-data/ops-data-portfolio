@@ -1,0 +1,290 @@
+{
+  "name": "alert_stock_n8n",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH all_shortages AS (\n  SELECT p.product_id\n  FROM public.products p\n  LEFT JOIN public.vw_stock_current s ON s.product_id = p.product_id\n  WHERE p.reorder_level IS NOT NULL\n    AND COALESCE(s.current_stock, 0) < p.reorder_level\n),\nnew_shortages AS (\n  SELECT sh.product_id\n  FROM all_shortages sh\n  WHERE NOT EXISTS (\n    SELECT 1\n    FROM public.alerts a\n    WHERE a.product_id = sh.product_id\n      AND a.alert_type = 'SHORTAGE'\n      AND a.sent_day = CURRENT_DATE\n  )\n)\nSELECT\n  (SELECT COUNT(*) FROM all_shortages)  AS total_shortages,\n  (SELECT COUNT(*) FROM new_shortages)  AS new_shortages;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -32,
+        -272
+      ],
+      "id": "36c775cc-c546-4676-bb4e-c0af45994825",
+      "name": "PG — Counts (total + new)",
+      "credentials": {
+        "postgres": {
+          "id": "eMdhfhwvTG3VizvU",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3e7e5f0d-1c22-47bf-849f-27f9ba8f7e28",
+              "leftValue": "={{$json.new_shortages}}\n",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        160,
+        -272
+      ],
+      "id": "f801f2f3-10d4-4d8d-8465-956e068104f3",
+      "name": "IF — New shortages?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -272
+      ],
+      "id": "02164438-c021-4e6d-8729-8055095006f5",
+      "name": "Trigger — Manual run"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  p.product_id,\n  p.product_code,\n  p.product_name,\n  COALESCE(s.current_stock, 0) AS current_stock,\n  p.reorder_level,\n  (p.reorder_level - COALESCE(s.current_stock, 0)) AS shortage\nFROM public.products p\nLEFT JOIN public.vw_stock_current s ON s.product_id = p.product_id\nWHERE p.reorder_level IS NOT NULL\n  AND COALESCE(s.current_stock, 0) < p.reorder_level\n  AND NOT EXISTS (\n    SELECT 1\n    FROM public.alerts a\n    WHERE a.product_id = p.product_id\n      AND a.alert_type = 'SHORTAGE'\n      AND a.sent_day = CURRENT_DATE\n  )\nORDER BY shortage DESC;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        368,
+        -288
+      ],
+      "id": "20a44cb1-dc04-42da-8bb8-2a9e1573e04f",
+      "name": "PG — Get new shortages rows",
+      "credentials": {
+        "postgres": {
+          "id": "eMdhfhwvTG3VizvU",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\n// Si no hay filas, devuelve igual 1 item con texto y alerts vacío\nif (rows.length === 0) {\n  return [{ json: { text: \"✅ Sin faltantes\", alerts: [] } }];\n}\n\nconst lines = rows.map(r =>\n  `• ${r.product_code} — ${r.product_name} | stock: ${r.current_stock} | min: ${r.reorder_level} | falta: ${r.shortage}`\n);\n\nconst text = `🚨 FALTANTES (${rows.length})\\n` + lines.join('\\n');\n\n// IMPORTANTE: guarda las filas originales para loguearlas después\nreturn [{ json: { text, alerts: rows } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        -288
+      ],
+      "id": "3742f5a6-2231-48c9-bef7-cd21f191e766",
+      "name": "JS — Format Telegram message"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.alerts\n  (product_id, alert_type, current_stock, reorder_level, shortage, workflow_run_id, telegram_message_id, telegram_chat_id)\nVALUES\n  ($1, 'SHORTAGE', $2, $3, $4, $5, $6, $7)\nON CONFLICT (product_id, alert_type, sent_day) DO NOTHING;\n\n",
+        "options": {
+          "queryReplacement": "=$1 = {{$json.product_id}}  $2 = {{$json.current_stock}}  $3 = {{$json.reorder_level}}  $4 = {{$json.shortage}}  $5 = {{$json.workflow_run_id}}  $6 = {{$json.telegram_message_id}}  $7 = {{$json.telegram_chat_id}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1200,
+        -288
+      ],
+      "id": "29ec8f05-2dd0-4517-9de4-2b45afe1e93f",
+      "name": "PG — Log alerts (upsert/day)",
+      "credentials": {
+        "postgres": {
+          "id": "eMdhfhwvTG3VizvU",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8576563861",
+        "text": "=={{ \"✅ Stock OK (\" + $now.toFormat(\"dd/LL/yyyy\") + \"): no hay faltantes por debajo del mínimo hoy.\" }}\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        368,
+        -32
+      ],
+      "id": "96502231-7cc8-46cd-8f3e-70d47ea6a3c2",
+      "name": "TG — Stock OK / No new alerts",
+      "webhookId": "166749f2-b271-4303-ab8d-0204720015fe",
+      "credentials": {
+        "telegramApi": {
+          "id": "yfIgMPsuOCSypbNw",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8576563861",
+        "text": "={{$json.text}}\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        800,
+        -288
+      ],
+      "id": "df5f901f-7c52-4509-aa75-1dd96929a81e",
+      "name": "TG — Send shortage alert",
+      "webhookId": "2784be6c-7042-4c04-9f91-a54158f0fb84",
+      "alwaysOutputData": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "yfIgMPsuOCSypbNw",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const alerts = $node[\"JS — Format Telegram message\"].json.alerts || [];\nconst messageId = $node[\"TG — Send shortage alert\"].json?.result?.message_id ?? null;\nconst chatId = $node[\"TG — Send shortage alert\"].json?.result?.chat?.id ?? null;\n\nconst runId = String($execution.id);\n\nreturn alerts.map(a => ({\n  json: {\n    product_id: a.product_id,\n    current_stock: Number(a.current_stock),\n    reorder_level: Number(a.reorder_level),\n    shortage: Number(a.shortage),\n    workflow_run_id: runId,\n    telegram_message_id: messageId,\n    telegram_chat_id: chatId,\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        -288
+      ],
+      "id": "46f41203-0c61-436a-b29b-48edc3066a8d",
+      "name": "JS — Expand alerts for logging"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "PG — Counts (total + new)": {
+      "main": [
+        [
+          {
+            "node": "IF — New shortages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — New shortages?": {
+      "main": [
+        [
+          {
+            "node": "PG — Get new shortages rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "TG — Stock OK / No new alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger — Manual run": {
+      "main": [
+        [
+          {
+            "node": "PG — Counts (total + new)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PG — Get new shortages rows": {
+      "main": [
+        [
+          {
+            "node": "JS — Format Telegram message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS — Format Telegram message": {
+      "main": [
+        [
+          {
+            "node": "TG — Send shortage alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TG — Send shortage alert": {
+      "main": [
+        [
+          {
+            "node": "JS — Expand alerts for logging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JS — Expand alerts for logging": {
+      "main": [
+        [
+          {
+            "node": "PG — Log alerts (upsert/day)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TG — Stock OK / No new alerts": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "c37bc788-9fef-4964-ad6a-5be486f2446b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "12660f99e44e79b8171b28121d275057ec2a7a2e3b01956afc989fbb06036770"
+  },
+  "id": "Z9D7jeJLtC2Glqay",
+  "tags": []
+}
