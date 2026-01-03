@@ -10,9 +10,9 @@ Proyecto chico de **control operativo**: calcula stock actual en PostgreSQL y en
   `product_code, product_name, current_stock, reorder_level, shortage (falta)`.
 
 ## Evidencias (proof)
-- `outputs/day1_kpi_faltantes.txt` — resultado del KPI SQL (faltantes)
-- `outputs/day2_workflow.png` — captura del workflow n8n
-- `outputs/day2_telegram.png` — captura del mensaje real en Telegram
+- `outputs/kpi_faltantes.txt` — resultado del KPI SQL (faltantes)
+- `outputs/workflow.png` — captura del workflow n8n
+- `outputs/telegram.png` — captura del mensaje real en Telegram
 
 ## Stack
 - PostgreSQL 16
