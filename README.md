@@ -10,9 +10,9 @@ A small “operations control” project: compute current stock in PostgreSQL an
   `product_code, product_name, current_stock, reorder_level, shortage`.
 
 ## Proof (evidence)
-- `outputs/day1_kpi_faltantes.txt` — SQL KPI result (shortages)
-- `outputs/day2_workflow.png` — n8n workflow screenshot
-- `outputs/day2_telegram.png` — real Telegram message screenshot
+- `outputs/kpi_faltantes.txt` — SQL KPI result (shortages)
+- `outputs/workflow.png` — n8n workflow screenshot
+- `outputs/telegram.png` — real Telegram message screenshot
 
 ## Tech stack
 - PostgreSQL 16
