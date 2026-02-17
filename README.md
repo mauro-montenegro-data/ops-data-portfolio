@@ -30,7 +30,7 @@ A small “operations control” project: compute current stock in PostgreSQL an
 - `n8n/`
   - `alerta_stock_n8n.json` — exported n8n workflow
 - `outputs/` — evidence (txt/png)
-- `docs/` — short notes (optional)
+- `docs/` — short notes
 
 ## Quickstart (local)
 ### 1) PostgreSQL
