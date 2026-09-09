@@ -1,70 +1,134 @@
-# Depot Stock Alert — PostgreSQL + n8n + Telegram
+# Control de Stock + Alertas — PostgreSQL, n8n y Telegram
 
-A small “operations control” project: compute current stock in PostgreSQL and send **real Telegram alerts** when items fall below a reorder level. Built as a portfolio-ready example for **Operations Analyst (Data & Automation)** roles.
+Caso pequeño de **Operations + Data + Automation**: calcula stock actual en PostgreSQL, detecta productos por debajo del punto de reposición y envía una alerta automática por Telegram mediante n8n.
 
-## What this does
-- Builds a minimal inventory model (`products`, `movements`) in PostgreSQL.
-- Computes current stock via a view: `vw_stock_current`.
-- Detects shortages when `current_stock < reorder_level`.
-- Runs an n8n workflow that queries shortages and sends a Telegram message listing:
-  `product_code, product_name, current_stock, reorder_level, shortage`.
+El proyecto está pensado como una demostración simple y revisable del recorrido completo **dato → regla → acción**.
 
-## Proof (evidence)
-- `outputs/kpi_faltantes.txt` — SQL KPI result (shortages)
-- `outputs/workflow.png` — n8n workflow screenshot
-- `outputs/telegram.png` — real Telegram message screenshot
+---
 
-## Tech stack
-- PostgreSQL 16
-- SQL
-- n8n (Docker)
-- Telegram Bot API
-- Git + GitHub
+## Problema
 
-## Repo structure
-- `sql/`
-  - `schema.sql` — tables
-  - `sample_data.sql` — demo data (fake)
-  - `views.sql` — `vw_stock_current`
-  - `kpis.sql` — shortage KPI query
-- `n8n/`
-  - `alerta_stock_n8n.json` — exported n8n workflow
-- `outputs/` — evidence (txt/png)
-- `docs/` — short notes
+Tener movimientos de stock registrados no alcanza si alguien debe revisar manualmente qué productos necesitan reposición.
 
-## Quickstart (local)
-### 1) PostgreSQL
-Create a database (example: `ops_portfolio`) and run the scripts in this order:
+La necesidad es convertir esos movimientos en una señal operativa:
 
-1. `sql/schema.sql`
-2. `sql/sample_data.sql`
-3. `sql/views.sql`
-4. `sql/kpis.sql`
-
-Quick check:
-```sql
-SELECT * FROM vw_stock_current ORDER BY product_id;
+```text
+movimientos
+    ↓
+stock actual
+    ↓
+comparación con reorder_level
+    ↓
+faltantes
+    ↓
+alerta
 ```
 
-### 2) n8n workflow (Telegram alert)
+---
 
-1. Start n8n (Docker).
-2. Import the workflow from: ``n8n/alert_stock_n8n.json``.
-3. Create credentials in n8n:
-   - **Postgres:** host / port / db / user / password
-   - **Telegram:** bot token + chat_id
-4. Run the workflow manually (or schedule it) and confirm the message arrives.
+## Qué hace
 
-> No secrets are stored in this repository. Use n8n credentials and/or local `.env` files.
+- Modela `products` y `movements` en PostgreSQL.
+- Calcula stock actual mediante la vista `vw_stock_current`.
+- Detecta faltantes cuando `current_stock < reorder_level`.
+- Calcula la cantidad faltante para alcanzar el nivel de reposición.
+- n8n consulta el resultado y arma un mensaje.
+- Telegram recibe una alerta con código, producto, stock actual, nivel objetivo y faltante.
 
+---
 
-## How it works (high level)
-- `vw_stock_current` aggregates movements (IN/OUT) to compute current stock.
-- The KPI query in `sql/kpis.sql` filters where stock is below reorder level and calculates the shortage.
-- n8n pulls those rows and formats a message to Telegram.
+## Evidencia incluida
 
-## Roadmap (small improvements)
-- Add a scheduled trigger (e.g., Mondays 08:00).
-- Add an `alerts` table to log sent alerts (traceability).
-- Add KPI #2 (top monthly rotation) and KPI #3 (monthly consumption by category).
+El repositorio contiene material para comprobar el flujo sin depender sólo de la descripción:
 
+- `outputs/kpi_faltantes.txt` — resultado del KPI en SQL;
+- `outputs/workflow.png` — captura del workflow de n8n;
+- `outputs/telegram.png` — captura del mensaje recibido en Telegram.
+
+---
+
+## Stack
+
+- PostgreSQL 16
+- SQL
+- n8n
+- Docker
+- Telegram Bot API
+
+---
+
+## Estructura
+
+```text
+sql/
+  schema.sql          # tablas
+  sample_data.sql     # datos de demo
+  views.sql           # vw_stock_current
+  kpis.sql            # consulta de faltantes
+
+n8n/
+  alert_stock_n8n.json
+
+outputs/
+  kpi_faltantes.txt
+  workflow.png
+  telegram.png
+```
+
+---
+
+## Lógica principal
+
+La vista agrega movimientos de entrada y salida para obtener el stock actual. La consulta de KPI filtra los productos debajo del nivel de reposición y calcula la diferencia.
+
+Conceptualmente:
+
+```sql
+current_stock < reorder_level
+```
+
+produce una fila de alerta con:
+
+```text
+product_code
+product_name
+current_stock
+reorder_level
+shortage
+```
+
+n8n transforma esas filas en un mensaje legible y lo envía por Telegram.
+
+---
+
+## Cómo ejecutarlo
+
+1. Crear una base PostgreSQL.
+2. Ejecutar, en orden:
+   - `sql/schema.sql`
+   - `sql/sample_data.sql`
+   - `sql/views.sql`
+   - `sql/kpis.sql`
+3. Importar `n8n/alert_stock_n8n.json` en n8n.
+4. Configurar credenciales de PostgreSQL y Telegram dentro de n8n.
+5. Ejecutar el workflow y verificar la alerta.
+
+No se almacenan secretos en el repositorio.
+
+---
+
+## Qué demuestra este proyecto
+
+- SQL aplicado a una necesidad operativa concreta.
+- Separación entre datos de movimientos y KPI derivado.
+- Automatización a partir de una condición de negocio.
+- Integración PostgreSQL → n8n → Telegram.
+- Evidencia visible del resultado final.
+
+---
+
+## Alcance
+
+Es un caso deliberadamente pequeño. No pretende reemplazar un sistema completo de inventario ni modela todavía historial de alertas, deduplicación, acknowledgement o políticas avanzadas de reposición.
+
+Esas extensiones quedan fuera del objetivo principal: mostrar de forma simple cómo un dato operativo puede transformarse en una acción automática.
